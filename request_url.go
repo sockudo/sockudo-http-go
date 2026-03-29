@@ -1,4 +1,4 @@
-package pusher
+package sockudo
 
 import (
 	"net/url"
@@ -44,9 +44,9 @@ func createRequestURL(method, host, path, key, secret, timestamp string, secure 
 
 	if host == "" {
 		if cluster != "" {
-			host = "api-" + cluster + ".pusher.com"
+			host = "api-" + cluster + ".sockudo.com"
 		} else {
-			host = "api.pusherapp.com"
+			host = "localhost"
 		}
 	}
 	var base string

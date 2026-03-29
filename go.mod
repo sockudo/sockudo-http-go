@@ -1,4 +1,4 @@
-module github.com/pusher/pusher-http-go/v5
+module github.com/sockudo/sockudo-http-go/v5
 
 go 1.14
 

@@ -1,4 +1,4 @@
-package pusher
+package sockudo
 
 import (
 	"bytes"
@@ -21,10 +21,20 @@ var headers = map[string]string{
 
 // change timeout to time.Duration
 func request(client *http.Client, method, url string, body []byte) ([]byte, error) {
+	return requestWithHeaders(client, method, url, body, nil)
+}
+
+func requestWithHeaders(client *http.Client, method, url string, body []byte, extraHeaders map[string]string) ([]byte, error) {
 	req, err := http.NewRequest(method, url, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, err
+	}
 
 	for key, val := range headers {
 		req.Header.Set(http.CanonicalHeaderKey(key), val)
+	}
+	for key, val := range extraHeaders {
+		req.Header.Set(key, val)
 	}
 
 	resp, err := client.Do(req)

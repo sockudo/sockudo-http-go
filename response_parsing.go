@@ -1,10 +1,10 @@
-package pusher
+package sockudo
 
 import (
 	"encoding/json"
 )
 
-// Channel represents the information about a channel from the Pusher API.
+// Channel represents the information about a channel from the Sockudo API.
 type Channel struct {
 	Name              string
 	Occupied          bool `json:"occupied,omitempty"`
@@ -12,7 +12,7 @@ type Channel struct {
 	SubscriptionCount int  `json:"subscription_count,omitempty"`
 }
 
-// ChannelsList represents a list of channels received by the Pusher API.
+// ChannelsList represents a list of channels received by the Sockudo API.
 type ChannelsList struct {
 	Channels map[string]ChannelListItem `json:"channels"`
 }

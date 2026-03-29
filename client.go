@@ -1,6 +1,7 @@
-package pusher
+package sockudo
 
 import (
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -10,30 +11,66 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
-var pusherPathRegex = regexp.MustCompile("^/apps/([0-9]+)$")
+var sockudoPathRegex = regexp.MustCompile("^/apps/([0-9]+)$")
 var maxTriggerableChannels = 100
+
+func generateBaseID() string {
+	b := make([]byte, 12)
+	rand.Read(b)
+	return base64.RawURLEncoding.EncodeToString(b)
+}
+
+func (c *Client) ensureBaseID() {
+	if c.idempotencyBaseID == "" {
+		c.idempotencyBaseID = generateBaseID()
+	}
+}
+
+const maxRetries = 3
+
+func isRetryableError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errMsg := err.Error()
+	if strings.HasPrefix(errMsg, "Status Code: 5") {
+		return true
+	}
+	if strings.HasPrefix(errMsg, "Status Code: ") {
+		return false
+	}
+	return true
+}
+
+func (c *Client) autoIdempotencyEnabled() bool {
+	if c.AutoIdempotencyKey == nil {
+		return true
+	}
+	return *c.AutoIdempotencyKey
+}
 
 const (
 	libraryVersion = "5.1.1"
-	libraryName    = "pusher-http-go"
+	libraryName    = "sockudo-http-go"
 )
 
 /*
-Client to the HTTP API of Pusher.
+Client to the HTTP API of Sockudo.
 
-There easiest way to configure the library is by creating a `Pusher` instance:
+There easiest way to configure the library is by creating a `Sockudo` instance:
 
-	client := pusher.Client{
+	client := sockudo.Client{
 		AppID: "your_app_id",
 		Key: "your_app_key",
 		Secret: "your_app_secret",
 	}
 
 To ensure requests occur over HTTPS, set the `Secure` property of a
-`pusher.Client` to `true`.
+`sockudo.Client` to `true`.
 
 	client.Secure = true // false by default
 
@@ -42,10 +79,10 @@ property to an instance of `time.Duration`, for example:
 
 	client.Timeout = time.Second * 3 // 5 seconds by default
 
-Changing the `pusher.Client`'s `Host` property will make sure requests are sent
+Changing the `sockudo.Client`'s `Host` property will make sure requests are sent
 to your specified host.
 
-	client.Host = "foo.bar.com" // by default this is "api.pusherapp.com".
+	client.Host = "foo.bar.com" // by default this is "localhost".
 */
 type Client struct {
 	AppID                        string
@@ -57,14 +94,17 @@ type Client struct {
 	HTTPClient                   *http.Client
 	EncryptionMasterKey          string  // deprecated
 	EncryptionMasterKeyBase64    string  // for E2E
-	OverrideMaxMessagePayloadKB  int     // set the agreed Pusher message limit increase
+	OverrideMaxMessagePayloadKB  int     // set the agreed Sockudo message limit increase
+	AutoIdempotencyKey           *bool   // when true (default), auto-generate idempotency keys on trigger
 	validatedEncryptionMasterKey *[]byte // parsed key for use
+	idempotencyBaseID            string
+	publishSerial                uint64
 }
 
 /*
-ClientFromURL allows client instantiation from a specially-crafted Pusher URL.
+ClientFromURL allows client instantiation from a specially-crafted Sockudo URL.
 
-	c := pusher.ClientFromURL("http://key:secret@api.pusherapp.com/apps/app_id")
+	c := sockudo.ClientFromURL("http://key:secret@localhost/apps/app_id")
 */
 func ClientFromURL(serverURL string) (*Client, error) {
 	url2, err := url.Parse(serverURL)
@@ -76,7 +116,7 @@ func ClientFromURL(serverURL string) (*Client, error) {
 		Host: url2.Host,
 	}
 
-	matches := pusherPathRegex.FindStringSubmatch(url2.Path)
+	matches := sockudoPathRegex.FindStringSubmatch(url2.Path)
 	if len(matches) == 0 {
 		return nil, errors.New("No app ID found")
 	}
@@ -101,10 +141,10 @@ func ClientFromURL(serverURL string) (*Client, error) {
 
 /*
 ClientFromEnv allows instantiation of a client from an environment variable.
-This is particularly relevant if you are using Pusher as a Heroku add-on,
+This is particularly relevant if you are using Sockudo as a Heroku add-on,
 which stores credentials in a `"PUSHER_URL"` environment variable. For example:
 
-	client := pusher.ClientFromEnv("PUSHER_URL")
+	client := sockudo.ClientFromEnv("PUSHER_URL")
 */
 func ClientFromEnv(key string) (*Client, error) {
 	url := os.Getenv(key)
@@ -127,8 +167,12 @@ func (c *Client) request(method, url string, body []byte) ([]byte, error) {
 	return request(c.requestClient(), method, url, body)
 }
 
+func (c *Client) requestWithExtraHeaders(method, url string, body []byte, extraHeaders map[string]string) ([]byte, error) {
+	return requestWithHeaders(c.requestClient(), method, url, body, extraHeaders)
+}
+
 /*
-Trigger triggers an event to the Pusher API.
+Trigger triggers an event to the Sockudo API.
 It is possible to trigger an event on one or more channels. Channel names can
 contain only characters which are alphanumeric, `_` or `-`` and have
 to be at most 200 characters long. Event name can be at most 200 characters long too.
@@ -151,15 +195,21 @@ TriggerWithParams or TriggerMultiWithParams requests.
 type TriggerParams struct {
 	// SocketID excludes a recipient whose connection has the `socket_id`
 	// specified here. You can read more here:
-	// http://pusher.com/docs/duplicates.
+	// http://sockudo.com/docs/duplicates.
 	SocketID *string
 	// Info is comma-separated vales of `"user_count"`, for
 	// presence-channels, and `"subscription_count"`, for all-channels.
 	// Note that the subscription count is not allowed by default. Please
-	// contact us at http://support.pusher.com if you wish to enable this.
+	// contact us at http://support.sockudo.com if you wish to enable this.
 	// Pass in `nil` if you do not wish to specify any query attributes.
-	// This is part of an [experimental feature](https://pusher.com/docs/lab#experimental-program).
+	// This is part of an [experimental feature](https://sockudo.com/docs/lab#experimental-program).
 	Info *string
+	// IdempotencyKey allows you to ensure that a trigger request is only
+	// processed once. When set, the key is included in the JSON body and
+	// sent as an X-Idempotency-Key HTTP header.
+	IdempotencyKey *string
+	// Extras contains V2 extras for publish events.
+	Extras *MessageExtras
 }
 
 func (params TriggerParams) toMap() map[string]string {
@@ -170,19 +220,31 @@ func (params TriggerParams) toMap() map[string]string {
 	if params.Info != nil {
 		m["info"] = *params.Info
 	}
+	if params.IdempotencyKey != nil {
+		m["idempotency_key"] = *params.IdempotencyKey
+	}
 	return m
+}
+
+func (params TriggerParams) extraHeaders() map[string]string {
+	if params.IdempotencyKey != nil {
+		return map[string]string{
+			"X-Idempotency-Key": *params.IdempotencyKey,
+		}
+	}
+	return nil
 }
 
 /*
 TriggerWithParams is the same as `client.Trigger`, except it allows additional
 parameters to be passed in. See:
-https://pusher.com/docs/channels/library_auth_reference/rest-api#request
+https://sockudo.com/docs/channels/library_auth_reference/rest-api#request
 for a complete list.
 
 	data := map[string]string{"hello": "world"}
 	socketID := "1234.12"
 	attributes := "user_count"
-	params := pusher.TriggerParams{SocketID: &socketID, Info: &attributes}
+	params := sockudo.TriggerParams{SocketID: &socketID, Info: &attributes}
 	channels, err := client.Trigger("greeting_channel", "say_hello", data, params)
 
 	//channels=> &{Channels:map[presence-chatroom:{UserCount:4} presence-notifications:{UserCount:31}]}
@@ -224,7 +286,7 @@ func (c *Client) TriggerMultiWithParams(
 /*
 TriggerExclusive triggers an event excluding a recipient whose connection has
 the `socket_id` you specify here from receiving the event.
-You can read more here: http://pusher.com/docs/duplicates.
+You can read more here: http://sockudo.com/docs/duplicates.
 
 	client.TriggerExclusive("a_channel", "event", data, "123.12")
 
@@ -297,7 +359,14 @@ func (c *Client) trigger(channels []string, eventName string, data interface{}, 
 		return nil, err
 	}
 
-	payload, err := encodeTriggerBody(channels, eventName, data, params.toMap(), masterKey, c.OverrideMaxMessagePayloadKB)
+	serial := atomic.AddUint64(&c.publishSerial, 1) - 1
+	if c.autoIdempotencyEnabled() && params.IdempotencyKey == nil {
+		c.ensureBaseID()
+		key := fmt.Sprintf("%s:%d", c.idempotencyBaseID, serial)
+		params.IdempotencyKey = &key
+	}
+
+	payload, err := encodeTriggerBody(channels, eventName, data, params.toMap(), masterKey, c.OverrideMaxMessagePayloadKB, params.Extras)
 	if err != nil {
 		return nil, err
 	}
@@ -306,12 +375,27 @@ func (c *Client) trigger(channels []string, eventName string, data interface{}, 
 	if err != nil {
 		return nil, err
 	}
-	response, err := c.request("POST", triggerURL, payload)
+
+	var response []byte
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		response, err = c.requestWithExtraHeaders("POST", triggerURL, payload, params.extraHeaders())
+		if err == nil || !isRetryableError(err) {
+			break
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
 
 	return unmarshalledTriggerChannelsList(response)
+}
+
+// MessageExtras contains V2 extras for publish events.
+type MessageExtras struct {
+	Headers        map[string]interface{} `json:"headers,omitempty"`
+	Ephemeral      *bool                  `json:"ephemeral,omitempty"`
+	IdempotencyKey *string                `json:"idempotency_key,omitempty"`
+	Echo           *bool                  `json:"echo,omitempty"`
 }
 
 /*
@@ -322,8 +406,12 @@ type Event struct {
 	Name     string
 	Data     interface{}
 	SocketID *string
-	// Info is part of an [experimental feature](https://pusher.com/docs/lab#experimental-program).
+	// Info is part of an [experimental feature](https://sockudo.com/docs/lab#experimental-program).
 	Info *string
+	// IdempotencyKey ensures this event in the batch is only processed once.
+	IdempotencyKey *string
+	// Extras contains V2 extras for publish events.
+	Extras *MessageExtras
 }
 
 /*
@@ -331,7 +419,7 @@ TriggerBatch triggers multiple events on multiple channels in a single call:
 
 	info := "subscription_count"
 	socketID := "1234.12"
-	client.TriggerBatch([]pusher.Event{
+	client.TriggerBatch([]sockudo.Event{
 		{ Channel: "donut-1", Name: "ev1", Data: "d1", SocketID: socketID, Info: &info },
 		{ Channel: "private-encrypted-secretdonut", Name: "ev2", Data: "d2", SocketID: socketID, Info: &info },
 	})
@@ -355,6 +443,17 @@ func (c *Client) TriggerBatch(batch []Event) (*TriggerBatchChannelsList, error) 
 		return nil, keyErr
 	}
 
+	serial := atomic.AddUint64(&c.publishSerial, 1) - 1
+	if c.autoIdempotencyEnabled() {
+		c.ensureBaseID()
+		for i := range batch {
+			if batch[i].IdempotencyKey == nil {
+				key := fmt.Sprintf("%s:%d:%d", c.idempotencyBaseID, serial, i)
+				batch[i].IdempotencyKey = &key
+			}
+		}
+	}
+
 	payload, err := encodeTriggerBatchBody(batch, masterKey, c.OverrideMaxMessagePayloadKB)
 	if err != nil {
 		return nil, err
@@ -364,7 +463,14 @@ func (c *Client) TriggerBatch(batch []Event) (*TriggerBatchChannelsList, error) 
 	if err != nil {
 		return nil, err
 	}
-	response, err := c.request("POST", triggerURL, payload)
+
+	var response []byte
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		response, err = c.request("POST", triggerURL, payload)
+		if err == nil || !isRetryableError(err) {
+			break
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -400,7 +506,7 @@ Channels returns a list of all the channels in an application.
 
 	prefixFilter := "presence-"
 	attributes := "user_count"
-	params := pusher.ChannelsParams{FilterByPrefix: &prefixFilter, Info: &attributes}
+	params := sockudo.ChannelsParams{FilterByPrefix: &prefixFilter, Info: &attributes}
 	channels, err := client.Channels(params)
 
 	//channels=> &{Channels:map[presence-chatroom:{UserCount:4} presence-notifications:{UserCount:31}  ]}
@@ -425,7 +531,7 @@ type ChannelParams struct {
 	// Info is comma-separated vales of `"user_count"`, for
 	// presence-channels, and `"subscription_count"`, for all-channels.
 	// Note that the subscription count is not allowed by default. Please
-	// contact us at http://support.pusher.com if you wish to enable this.
+	// contact us at http://support.sockudo.com if you wish to enable this.
 	// Pass in `nil` if you do not wish to specify any query attributes.
 	Info *string
 }
@@ -442,7 +548,7 @@ func (params ChannelParams) toMap() map[string]string {
 Channel allows you to get the state of a single channel.
 
 	attributes := "user_count,subscription_count"
-	params := pusher.ChannelParams{Info: &attributes}
+	params := sockudo.ChannelParams{Info: &attributes}
 	channel, err := client.Channel("presence-chatroom", params)
 
 	//channel=> &{Name:presence-chatroom Occupied:true UserCount:42 SubscriptionCount:42}
@@ -487,7 +593,7 @@ It returns an authentication signature to send back to the client
 and authenticate them. In order to identify a user, this method acceps a map containing
 arbitrary user data. It must contain at least an id field with the user's id as a string.
 
-For more information see our docs: http://pusher.com/docs/authenticating_users.
+For more information see our docs: http://sockudo.com/docs/authenticating_users.
 
 This is an example of authenticating a user, using the built-in
 Golang HTTP library to start a server.
@@ -496,7 +602,7 @@ In order to authenticate a client, one must read the response into type `[]byte`
 and pass it in. This will return a signature in the form of a `[]byte` for you
 to send back to the client.
 
-	func pusherUserAuth(res http.ResponseWriter, req *http.Request) {
+	func sockudoUserAuth(res http.ResponseWriter, req *http.Request) {
 
 		params, _ := ioutil.ReadAll(req.Body)
 		userData := map[string]interface{} { "id": "1234", "twitter": "jamiepatel" }
@@ -509,7 +615,7 @@ to send back to the client.
 	}
 
 	func main() {
-		http.HandleFunc("/pusher/user-auth", pusherUserAuth)
+		http.HandleFunc("/sockudo/user-auth", sockudoUserAuth)
 		http.ListenAndServe(":5000", nil)
 	}
 */
@@ -545,7 +651,7 @@ AuthorizePrivateChannel allows you to authorize a users subscription to a
 private channel. It returns an authorization signature to send back to the client
 and authorize them.
 
-For more information see our docs: http://pusher.com/docs/authorizing_users.
+For more information see our docs: http://sockudo.com/docs/authorizing_users.
 
 This is an example of authorizing a private-channel, using the built-in
 Golang HTTP library to start a server.
@@ -554,7 +660,7 @@ In order to authorize a client, one must read the response into type `[]byte`
 and pass it in. This will return a signature in the form of a `[]byte` for you
 to send back to the client.
 
-	func pusherAuth(res http.ResponseWriter, req *http.Request) {
+	func sockudoAuth(res http.ResponseWriter, req *http.Request) {
 
 		params, _ := ioutil.ReadAll(req.Body)
 		response, err := client.AuthorizePrivateChannel(params)
@@ -566,7 +672,7 @@ to send back to the client.
 	}
 
 	func main() {
-		http.HandleFunc("/pusher/auth", pusherAuth)
+		http.HandleFunc("/sockudo/auth", sockudoAuth)
 		http.ListenAndServe(":5000", nil)
 	}
 */
@@ -591,11 +697,11 @@ presence channel. It returns an authorization signature to send back to the clie
 and authorize them. In order to identify a user, clients are sent a user_id and,
 optionally, custom data.
 
-In this library, one does this by passing a `pusher.MemberData` instance.
+In this library, one does this by passing a `sockudo.MemberData` instance.
 
 	params, _ := ioutil.ReadAll(req.Body)
 
-	presenceData := pusher.MemberData{
+	presenceData := sockudo.MemberData{
 		UserID: "1",
 		UserInfo: map[string]string{
 			"twitter": "jamiepatel",
@@ -673,19 +779,19 @@ func (c *Client) authorizeChannel(params []byte, member *MemberData) (response [
 }
 
 /*
-Webhook allows you to check that a Webhook you receive is indeed from Pusher, by
+Webhook allows you to check that a Webhook you receive is indeed from Sockudo, by
 checking the token and authentication signature in the header of the request. On
-your dashboard at http://app.pusher.com, you can set up webhooks to POST a
+your dashboard at http://app.sockudo.com, you can set up webhooks to POST a
 payload to your server after certain events. Such events include channels being
 occupied or vacated, members being added or removed in presence-channels, or
 after client-originated events. For more information see
-https://pusher.com/docs/webhooks.
+https://sockudo.com/docs/webhooks.
 
-If the webhook is valid, a `*pusher.Webhook* will be returned, and the `err`
+If the webhook is valid, a `*sockudo.Webhook* will be returned, and the `err`
 value will be nil. If it is invalid, the first return value will be nil, and an
 error will be passed.
 
-	func pusherWebhook(res http.ResponseWriter, req *http.Request) {
+	func sockudoWebhook(res http.ResponseWriter, req *http.Request) {
 
 		body, _ := ioutil.ReadAll(req.Body)
 		webhook, err := client.Webhook(req.Header, body)

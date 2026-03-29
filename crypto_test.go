@@ -1,4 +1,4 @@
-package pusher
+package sockudo
 
 import (
 	"encoding/hex"

@@ -1,4 +1,4 @@
-package pusher
+package sockudo
 
 import (
 	"encoding/json"
@@ -11,11 +11,13 @@ import (
 const defaultMaxEventPayloadSizeKB = 10
 
 type batchEvent struct {
-	Channel  string  `json:"channel"`
-	Name     string  `json:"name"`
-	Data     string  `json:"data"`
-	SocketID *string `json:"socket_id,omitempty"`
-	Info     *string `json:"info,omitempty"`
+	Channel        string         `json:"channel"`
+	Name           string         `json:"name"`
+	Data           string         `json:"data"`
+	SocketID       *string        `json:"socket_id,omitempty"`
+	Info           *string        `json:"info,omitempty"`
+	IdempotencyKey *string        `json:"idempotency_key,omitempty"`
+	Extras         *MessageExtras `json:"extras,omitempty"`
 }
 type batchPayload struct {
 	Batch []batchEvent `json:"batch"`
@@ -28,6 +30,7 @@ func encodeTriggerBody(
 	params map[string]string,
 	encryptionKey []byte,
 	overrideMaxMessagePayloadKB int,
+	extras *MessageExtras,
 ) ([]byte, error) {
 	dataBytes, err := encodeEventData(data)
 	if err != nil {
@@ -60,6 +63,9 @@ func encodeTriggerBody(
 		}
 		eventPayload[k] = v
 	}
+	if extras != nil {
+		eventPayload["extras"] = extras
+	}
 	return json.Marshal(eventPayload)
 }
 
@@ -90,11 +96,13 @@ func encodeTriggerBatchBody(
 			return nil, fmt.Errorf("Data of the event #%d in batch, exceeded maximum size (%d bytes is too much)", idx, len(stringifyedDataBytes))
 		}
 		newBatchEvent := batchEvent{
-			Channel:  e.Channel,
-			Name:     e.Name,
-			Data:     stringifyedDataBytes,
-			SocketID: e.SocketID,
-			Info:     e.Info,
+			Channel:        e.Channel,
+			Name:           e.Name,
+			Data:           stringifyedDataBytes,
+			SocketID:       e.SocketID,
+			Info:           e.Info,
+			IdempotencyKey: e.IdempotencyKey,
+			Extras:         e.Extras,
 		}
 		batchEvents[idx] = newBatchEvent
 	}

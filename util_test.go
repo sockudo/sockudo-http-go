@@ -1,6 +1,7 @@
-package pusher
+package sockudo
 
 import (
+	"regexp"
 	"testing"
 
 	"gopkg.in/stretchr/testify.v1/assert"
@@ -79,4 +80,16 @@ func TestValidateUserDataInvalidId(t *testing.T) {
 	}
 	err := validateUserData(m)
 	assert.EqualError(t, err, "Invalid id in user data: ''")
+}
+
+func TestGenerateIdempotencyKeyFormat(t *testing.T) {
+	key := GenerateIdempotencyKey()
+	uuidRegex := regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+	assert.Regexp(t, uuidRegex, key)
+}
+
+func TestGenerateIdempotencyKeyUnique(t *testing.T) {
+	key1 := GenerateIdempotencyKey()
+	key2 := GenerateIdempotencyKey()
+	assert.NotEqual(t, key1, key2)
 }

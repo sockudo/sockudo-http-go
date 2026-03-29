@@ -1,4 +1,4 @@
-package pusher
+package sockudo
 
 import (
 	"encoding/json"
@@ -14,6 +14,8 @@ import (
 
 	"gopkg.in/stretchr/testify.v1/assert"
 )
+
+func boolPtr(v bool) *bool { return &v }
 
 func TestSendToUserSuccessCase(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
@@ -36,7 +38,7 @@ func TestSendToUserSuccessCase(t *testing.T) {
 	defer server.Close()
 
 	u, _ := url.Parse(server.URL)
-	client := Client{AppID: "id", Key: "key", Secret: "secret", Host: u.Host}
+	client := Client{AppID: "id", Key: "key", Secret: "secret", Host: u.Host, AutoIdempotencyKey: boolPtr(false)}
 	err := client.SendToUser("123456", "test", "yolo")
 	assert.NoError(t, err)
 }
@@ -75,7 +77,7 @@ func TestTriggerSuccessCase(t *testing.T) {
 	defer server.Close()
 
 	u, _ := url.Parse(server.URL)
-	client := Client{AppID: "id", Key: "key", Secret: "secret", Host: u.Host}
+	client := Client{AppID: "id", Key: "key", Secret: "secret", Host: u.Host, AutoIdempotencyKey: boolPtr(false)}
 	err := client.Trigger("test_channel", "test", "yolo")
 	assert.NoError(t, err)
 }
@@ -101,7 +103,7 @@ func TestTriggerWithStructSuccessCase(t *testing.T) {
 	defer server.Close()
 
 	u, _ := url.Parse(server.URL)
-	client := Client{AppID: "id", Key: "key", Secret: "secret", Host: u.Host}
+	client := Client{AppID: "id", Key: "key", Secret: "secret", Host: u.Host, AutoIdempotencyKey: boolPtr(false)}
 	err := client.Trigger("test_channel", "test", struct{ Key string }{Key: "value"})
 	assert.NoError(t, err)
 }
@@ -129,7 +131,7 @@ func TestTriggerWithParamsSuccessCase(t *testing.T) {
 	defer server.Close()
 
 	u, _ := url.Parse(server.URL)
-	client := Client{AppID: "id", Key: "key", Secret: "secret", Host: u.Host}
+	client := Client{AppID: "id", Key: "key", Secret: "secret", Host: u.Host, AutoIdempotencyKey: boolPtr(false)}
 	// Empty parameters
 	channels, err := client.TriggerWithParams("test_channel", "test", "yolo", TriggerParams{})
 	assert.NoError(t, err)
@@ -162,7 +164,7 @@ func TestTriggerWithParamsInfoSuccessCase(t *testing.T) {
 	defer server.Close()
 
 	u, _ := url.Parse(server.URL)
-	client := Client{AppID: "id", Key: "key", Secret: "secret", Host: u.Host}
+	client := Client{AppID: "id", Key: "key", Secret: "secret", Host: u.Host, AutoIdempotencyKey: boolPtr(false)}
 	attributes := "subscription_count"
 	channels, err := client.TriggerWithParams("test_channel", "test", "yolo", TriggerParams{Info: &attributes})
 	assert.NoError(t, err)
@@ -174,6 +176,57 @@ func TestTriggerWithParamsInfoSuccessCase(t *testing.T) {
 		},
 	}
 	assert.Equal(t, expected, channels)
+}
+
+func TestTriggerWithIdempotencyKey(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		res.WriteHeader(200)
+		fmt.Fprintf(res, "{}")
+		assert.Equal(t, "POST", req.Method)
+
+		expectedBody := map[string]interface{}{
+			"name":            "test",
+			"channels":        []interface{}{"test_channel"},
+			"data":            "yolo",
+			"idempotency_key": "abc-123",
+		}
+		bodyDecoder := json.NewDecoder(req.Body)
+		var actualBody map[string]interface{}
+		err := bodyDecoder.Decode(&actualBody)
+		assert.NoError(t, err)
+		assert.Equal(t, expectedBody, actualBody)
+
+		assert.Equal(t, "abc-123", req.Header.Get("X-Idempotency-Key"))
+	}))
+	defer server.Close()
+
+	u, _ := url.Parse(server.URL)
+	client := Client{AppID: "id", Key: "key", Secret: "secret", Host: u.Host}
+	idempotencyKey := "abc-123"
+	_, err := client.TriggerWithParams("test_channel", "test", "yolo", TriggerParams{IdempotencyKey: &idempotencyKey})
+	assert.NoError(t, err)
+}
+
+func TestTriggerWithoutIdempotencyKeyNoHeader(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		res.WriteHeader(200)
+		fmt.Fprintf(res, "{}")
+
+		assert.Empty(t, req.Header.Get("X-Idempotency-Key"))
+
+		bodyDecoder := json.NewDecoder(req.Body)
+		var actualBody map[string]interface{}
+		err := bodyDecoder.Decode(&actualBody)
+		assert.NoError(t, err)
+		_, hasKey := actualBody["idempotency_key"]
+		assert.False(t, hasKey, "idempotency_key should not be in body when not set")
+	}))
+	defer server.Close()
+
+	u, _ := url.Parse(server.URL)
+	client := Client{AppID: "id", Key: "key", Secret: "secret", Host: u.Host, AutoIdempotencyKey: boolPtr(false)}
+	_, err := client.TriggerWithParams("test_channel", "test", "yolo", TriggerParams{})
+	assert.NoError(t, err)
 }
 
 func TestTriggerMultiSuccessCase(t *testing.T) {
@@ -195,7 +248,7 @@ func TestTriggerMultiSuccessCase(t *testing.T) {
 	defer server.Close()
 
 	u, _ := url.Parse(server.URL)
-	client := Client{AppID: "id", Key: "key", Secret: "secret", Host: u.Host}
+	client := Client{AppID: "id", Key: "key", Secret: "secret", Host: u.Host, AutoIdempotencyKey: boolPtr(false)}
 	err := client.TriggerMulti([]string{"test_channel", "other_channel"}, "test", "yolo")
 	assert.NoError(t, err)
 }
@@ -242,7 +295,7 @@ func TestTriggerMultiWithParamsInfoSuccessCase(t *testing.T) {
 	defer server.Close()
 
 	u, _ := url.Parse(server.URL)
-	client := Client{AppID: "id", Key: "key", Secret: "secret", Host: u.Host}
+	client := Client{AppID: "id", Key: "key", Secret: "secret", Host: u.Host, AutoIdempotencyKey: boolPtr(false)}
 	attributes := "user_count,subscription_count"
 	channels, err := client.TriggerMultiWithParams([]string{"presence-test_channel", "test_channel"}, "test", "yolo", TriggerParams{Info: &attributes})
 	assert.NoError(t, err)
@@ -343,7 +396,7 @@ func TestTriggerWithSocketID(t *testing.T) {
 	defer server.Close()
 
 	u, _ := url.Parse(server.URL)
-	client := Client{AppID: "id", Key: "key", Secret: "secret", Host: u.Host}
+	client := Client{AppID: "id", Key: "key", Secret: "secret", Host: u.Host, AutoIdempotencyKey: boolPtr(false)}
 	client.TriggerExclusive("test_channel", "test", "yolo", "1234.12")
 }
 
@@ -369,10 +422,36 @@ func TestTriggerBatchSuccess(t *testing.T) {
 	defer server.Close()
 
 	u, _ := url.Parse(server.URL)
-	client := Client{AppID: "appid", Key: "key", Secret: "secret", Host: u.Host}
+	client := Client{AppID: "appid", Key: "key", Secret: "secret", Host: u.Host, AutoIdempotencyKey: boolPtr(false)}
 	response, err := client.TriggerBatch([]Event{
 		{Channel: "test_channel", Name: "test", Data: "yolo1"},
 		{Channel: "test_channel", Name: "test", Data: "yolo2"},
+	})
+
+	assert.NoError(t, err)
+	assert.Equal(t, &TriggerBatchChannelsList{}, response)
+}
+
+func TestTriggerBatchWithIdempotencyKey(t *testing.T) {
+	expectedBody := `{"batch":[{"channel":"test_channel","name":"test","data":"yolo1","idempotency_key":"key-1"},{"channel":"test_channel","name":"test","data":"yolo2","idempotency_key":"key-2"}]}`
+	server := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		res.WriteHeader(200)
+		fmt.Fprintf(res, "{}")
+		assert.Equal(t, "POST", req.Method)
+
+		actualBody, err := ioutil.ReadAll(req.Body)
+		assert.Equal(t, expectedBody, string(actualBody))
+		assert.NoError(t, err)
+	}))
+	defer server.Close()
+
+	u, _ := url.Parse(server.URL)
+	client := Client{AppID: "appid", Key: "key", Secret: "secret", Host: u.Host}
+	key1 := "key-1"
+	key2 := "key-2"
+	response, err := client.TriggerBatch([]Event{
+		{Channel: "test_channel", Name: "test", Data: "yolo1", IdempotencyKey: &key1},
+		{Channel: "test_channel", Name: "test", Data: "yolo2", IdempotencyKey: &key2},
 	})
 
 	assert.NoError(t, err)
@@ -396,7 +475,7 @@ func TestTriggerBatchInfoSuccess(t *testing.T) {
 	defer server.Close()
 
 	u, _ := url.Parse(server.URL)
-	client := Client{AppID: "appid", Key: "key", Secret: "secret", Host: u.Host}
+	client := Client{AppID: "appid", Key: "key", Secret: "secret", Host: u.Host, AutoIdempotencyKey: boolPtr(false)}
 	presenceChannelInfo := "user_count,subscription_count"
 	channelInfo := "subscription_count"
 	channels, err := client.TriggerBatch([]Event{
@@ -433,7 +512,7 @@ func TestTriggerBatchWithEncryptionMasterKeyNoEncryptedChanSuccess(t *testing.T)
 	}))
 	defer server.Close()
 	u, _ := url.Parse(server.URL)
-	client := Client{AppID: "appid", Key: "key", Secret: "secret", EncryptionMasterKeyBase64: "ZUhQVldIZzduRkdZVkJzS2pPRkRYV1JyaWJJUjJiMGI=", Host: u.Host}
+	client := Client{AppID: "appid", Key: "key", Secret: "secret", EncryptionMasterKeyBase64: "ZUhQVldIZzduRkdZVkJzS2pPRkRYV1JyaWJJUjJiMGI=", Host: u.Host, AutoIdempotencyKey: boolPtr(false)}
 	response, err := client.TriggerBatch([]Event{
 		{Channel: "test_channel", Name: "test", Data: "yolo1"},
 		{Channel: "test_channel", Name: "test", Data: "yolo2"},
@@ -809,35 +888,35 @@ func TestDataSizeOverridenValidation(t *testing.T) {
 }
 
 func TestInitialisationFromURL(t *testing.T) {
-	url := "http://feaf18a411d3cb9216ee:fec81108d90e1898e17a@api.pusherapp.com/apps/104060"
+	url := "http://feaf18a411d3cb9216ee:fec81108d90e1898e17a@localhost/apps/104060"
 	client, _ := ClientFromURL(url)
-	expectedClient := &Client{Key: "feaf18a411d3cb9216ee", Secret: "fec81108d90e1898e17a", AppID: "104060", Host: "api.pusherapp.com"}
+	expectedClient := &Client{Key: "feaf18a411d3cb9216ee", Secret: "fec81108d90e1898e17a", AppID: "104060", Host: "localhost"}
 	assert.Equal(t, expectedClient, client)
 }
 
 func TestURLInitErrorNoSecret(t *testing.T) {
-	url := "http://fec81108d90e1898e17a@api.pusherapp.com/apps"
+	url := "http://fec81108d90e1898e17a@localhost/apps"
 	client, err := ClientFromURL(url)
 	assert.Nil(t, client)
 	assert.Error(t, err)
 }
 
 func TestURLInitHTTPS(t *testing.T) {
-	url := "https://key:secret@api.pusherapp.com/apps/104060"
+	url := "https://key:secret@localhost/apps/104060"
 	client, _ := ClientFromURL(url)
 	assert.True(t, client.Secure)
 }
 
 func TestURLInitErrorNoID(t *testing.T) {
-	url := "http://fec81108d90e1898e17a@api.pusherapp.com/apps"
+	url := "http://fec81108d90e1898e17a@localhost/apps"
 	client, err := ClientFromURL(url)
 	assert.Nil(t, client)
 	assert.Error(t, err)
 }
 
 func TestInitialisationFromENV(t *testing.T) {
-	os.Setenv("PUSHER_URL", "http://feaf18a411d3cb9216ee:fec81108d90e1898e17a@api.pusherapp.com/apps/104060")
-	client, _ := ClientFromEnv("PUSHER_URL")
-	expectedClient := &Client{Key: "feaf18a411d3cb9216ee", Secret: "fec81108d90e1898e17a", AppID: "104060", Host: "api.pusherapp.com"}
+	os.Setenv("SOCKUDO_URL", "http://feaf18a411d3cb9216ee:fec81108d90e1898e17a@localhost/apps/104060")
+	client, _ := ClientFromEnv("SOCKUDO_URL")
+	expectedClient := &Client{Key: "feaf18a411d3cb9216ee", Secret: "fec81108d90e1898e17a", AppID: "104060", Host: "localhost"}
 	assert.Equal(t, expectedClient, client)
 }
