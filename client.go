@@ -20,7 +20,9 @@ var maxTriggerableChannels = 100
 
 func generateBaseID() string {
 	b := make([]byte, 12)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		panic(err)
+	}
 	return base64.RawURLEncoding.EncodeToString(b)
 }
 
