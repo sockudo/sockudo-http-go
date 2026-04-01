@@ -9,11 +9,6 @@ import (
 	"strconv"
 )
 
-const (
-	contentTypeHeaderKey   = "Content-Type"
-	contentTypeHeaderValue = "application/json"
-)
-
 var headers = map[string]string{
 	"Content-Type":     "application/json",
 	"X-Pusher-Library": fmt.Sprintf("%s %s", libraryName, libraryVersion),
@@ -31,7 +26,7 @@ func requestWithHeaders(client *http.Client, method, url string, body []byte, ex
 	}
 
 	for key, val := range headers {
-		req.Header.Set(http.CanonicalHeaderKey(key), val)
+		req.Header.Set(key, val)
 	}
 	for key, val := range extraHeaders {
 		req.Header.Set(key, val)
