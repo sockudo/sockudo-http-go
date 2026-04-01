@@ -397,7 +397,7 @@ func TestTriggerWithSocketID(t *testing.T) {
 
 	u, _ := url.Parse(server.URL)
 	client := Client{AppID: "id", Key: "key", Secret: "secret", Host: u.Host, AutoIdempotencyKey: boolPtr(false)}
-	_, _ = client.TriggerExclusive("test_channel", "test", "yolo", "1234.12")
+	_ = client.TriggerExclusive("test_channel", "test", "yolo", "1234.12")
 }
 
 func TestTriggerSocketIDValidation(t *testing.T) {
