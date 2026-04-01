@@ -8,7 +8,7 @@ webhooks and authenticate private- or presence-channels.
 In order to use this library, you need to have a Sockudo instance running.
 You will need the application credentials for your app.
 
-Getting Started
+# Getting Started
 
 To create a new client, pass in your application credentials to a `sockudo.Client` struct:
 

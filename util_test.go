@@ -49,7 +49,7 @@ func TestInvalidChannelAuthorizationParams(t *testing.T) {
 
 func TestValidateUserDataSuccess(t *testing.T) {
 	m := map[string]interface{}{
-		"id": "12345",
+		"id":    "12345",
 		"email": "test@test.com",
 	}
 	err := validateUserData(m)
@@ -66,7 +66,7 @@ func TestValidateUserDataNoId(t *testing.T) {
 
 func TestValidateUserDataIdIsNotString(t *testing.T) {
 	m := map[string]interface{}{
-		"id": 123,
+		"id":    123,
 		"email": "test@test.com",
 	}
 	err := validateUserData(m)
@@ -75,7 +75,7 @@ func TestValidateUserDataIdIsNotString(t *testing.T) {
 
 func TestValidateUserDataInvalidId(t *testing.T) {
 	m := map[string]interface{}{
-		"id": "",
+		"id":    "",
 		"email": "test@test.com",
 	}
 	err := validateUserData(m)

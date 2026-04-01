@@ -672,29 +672,29 @@ func TestAuthenticateUser(t *testing.T) {
 	u, _ := url.Parse(server.URL)
 
 	client := Client{
-		AppID:               "appid",
-		Key:                 "key",
-		Secret:              "secret",
-		Host:                u.Host,
+		AppID:  "appid",
+		Key:    "key",
+		Secret: "secret",
+		Host:   u.Host,
 	}
 
 	var params []byte
 	var userData map[string]interface{}
 
 	params = []byte("socket_id=12345.12345")
-	userData = map[string]interface{} {}
+	userData = map[string]interface{}{}
 	_, err := client.AuthenticateUser(params, userData)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Missing id in user data")
 
 	params = []byte("not_socket_id=12345.12345")
-	userData = map[string]interface{} { "id": "1234" }
+	userData = map[string]interface{}{"id": "1234"}
 	_, err = client.AuthenticateUser(params, userData)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "socket_id not found")
 
 	params = []byte("socket_id=12345.12345")
-	userData = map[string]interface{} { "id": "1234" }
+	userData = map[string]interface{}{"id": "1234"}
 	var response []byte
 	response, err = client.AuthenticateUser(params, userData)
 	assert.NoError(t, err)
