@@ -18,10 +18,8 @@ func unsignedParams(key, timestamp string, body []byte, parameters map[string]st
 		params.Add("body_md5", md5Signature(body))
 	}
 
-	if parameters != nil {
-		for key, values := range parameters {
-			params.Add(key, values)
-		}
+	for key, values := range parameters {
+		params.Add(key, values)
 	}
 
 	return params
