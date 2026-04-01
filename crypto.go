@@ -96,7 +96,9 @@ func decryptEvents(webhookData Webhook, encryptionKey []byte) (*Webhook, error) 
 	for _, event := range webhookData.Events {
 		if isEncryptedChannel(event.Channel) {
 			var encryptedMessage EncryptedMessage
-			json.Unmarshal([]byte(event.Data), &encryptedMessage)
+			if err := json.Unmarshal([]byte(event.Data), &encryptedMessage); err != nil {
+				return decryptedWebhooks, err
+			}
 			cipherTextBytes, decodePayloadErr := base64.StdEncoding.DecodeString(encryptedMessage.Ciphertext)
 			if decodePayloadErr != nil {
 				return decryptedWebhooks, decodePayloadErr
