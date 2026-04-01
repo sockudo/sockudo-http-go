@@ -113,7 +113,7 @@ func TestTriggerWithParamsSuccessCase(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		res.WriteHeader(200)
 		testJSON := "{}"
-		fmt.Fprintf(res, testJSON)
+		fmt.Fprint(res, testJSON)
 		assert.Equal(t, "POST", req.Method)
 
 		expectedBody := map[string]interface{}{"name": "test", "channels": []interface{}{"test_channel"}, "data": "yolo"}
@@ -146,7 +146,7 @@ func TestTriggerWithParamsInfoSuccessCase(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		res.WriteHeader(200)
 		testJSON := "{\"channels\":{\"test_channel\":{\"subscription_count\":1}}}"
-		fmt.Fprintf(res, testJSON)
+		fmt.Fprint(res, testJSON)
 		assert.Equal(t, "POST", req.Method)
 
 		expectedBody := map[string]interface{}{"name": "test", "channels": []interface{}{"test_channel"}, "data": "yolo", "info": "subscription_count"}
@@ -277,7 +277,7 @@ func TestTriggerMultiWithParamsInfoSuccessCase(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		res.WriteHeader(200)
 		testJSON := "{\"channels\":{\"presence-test_channel\":{\"subscription_count\":2,\"user_count\":1},\"test_channel\":{\"subscription_count\":3}}}"
-		fmt.Fprintf(res, testJSON)
+		fmt.Fprint(res, testJSON)
 		assert.Equal(t, "POST", req.Method)
 
 		expectedBody := map[string]interface{}{"name": "test", "channels": []interface{}{"presence-test_channel", "test_channel"}, "data": "yolo", "info": "user_count,subscription_count"}
