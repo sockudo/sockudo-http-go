@@ -76,10 +76,7 @@ func channelsAreValid(channels []string) bool {
 }
 
 func isEncryptedChannel(channel string) bool {
-	if strings.HasPrefix(channel, "private-encrypted-") {
-		return true
-	}
-	return false
+	return strings.HasPrefix(channel, "private-encrypted-")
 }
 
 func validateUserData(userData map[string]interface{}) (err error) {
