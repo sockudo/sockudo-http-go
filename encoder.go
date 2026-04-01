@@ -2,7 +2,6 @@ package sockudo
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 )
 
@@ -50,7 +49,7 @@ func encodeTriggerBody(
 		eventExceedsMaximumSize = len(payloadData) > overrideMaxMessagePayloadKB*1024
 	}
 	if eventExceedsMaximumSize {
-		return nil, errors.New(fmt.Sprintf("Event payload exceeded maximum size (%d bytes is too much)", len(payloadData)))
+		return nil, fmt.Errorf("Event payload exceeded maximum size (%d bytes is too much)", len(payloadData))
 	}
 	eventPayload := map[string]interface{}{
 		"name":     event,
@@ -59,7 +58,7 @@ func encodeTriggerBody(
 	}
 	for k, v := range params {
 		if _, ok := eventPayload[k]; ok {
-			return nil, errors.New(fmt.Sprintf("Paramater %s specified multiple times", k))
+			return nil, fmt.Errorf("Paramater %s specified multiple times", k)
 		}
 		eventPayload[k] = v
 	}
