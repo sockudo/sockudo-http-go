@@ -546,6 +546,42 @@ func (params ChannelParams) toMap() map[string]string {
 	return m
 }
 
+type HistoryParams struct {
+	Limit       *int
+	Direction   *string
+	Cursor      *string
+	StartSerial *int64
+	EndSerial   *int64
+	StartTimeMS *int64
+	EndTimeMS   *int64
+}
+
+func (params HistoryParams) toMap() map[string]string {
+	m := make(map[string]string)
+	if params.Limit != nil {
+		m["limit"] = fmt.Sprintf("%d", *params.Limit)
+	}
+	if params.Direction != nil {
+		m["direction"] = *params.Direction
+	}
+	if params.Cursor != nil {
+		m["cursor"] = *params.Cursor
+	}
+	if params.StartSerial != nil {
+		m["start_serial"] = fmt.Sprintf("%d", *params.StartSerial)
+	}
+	if params.EndSerial != nil {
+		m["end_serial"] = fmt.Sprintf("%d", *params.EndSerial)
+	}
+	if params.StartTimeMS != nil {
+		m["start_time_ms"] = fmt.Sprintf("%d", *params.StartTimeMS)
+	}
+	if params.EndTimeMS != nil {
+		m["end_time_ms"] = fmt.Sprintf("%d", *params.EndTimeMS)
+	}
+	return m
+}
+
 /*
 Channel allows you to get the state of a single channel.
 
@@ -587,6 +623,26 @@ func (c *Client) GetChannelUsers(name string) (*Users, error) {
 		return nil, err
 	}
 	return unmarshalledChannelUsers(response)
+}
+
+/*
+ChannelHistory returns durable history for a single channel.
+
+	limit := 50
+	direction := "newest_first"
+	page, err := client.ChannelHistory("presence-chatroom", HistoryParams{Limit: &limit, Direction: &direction})
+*/
+func (c *Client) ChannelHistory(name string, params HistoryParams) (*HistoryPage, error) {
+	path := fmt.Sprintf("/apps/%s/channels/%s/history", c.AppID, name)
+	u, err := createRequestURL("GET", c.Host, path, c.Key, c.Secret, authTimestamp(), c.Secure, nil, params.toMap(), c.Cluster)
+	if err != nil {
+		return nil, err
+	}
+	response, err := c.request("GET", u, nil)
+	if err != nil {
+		return nil, err
+	}
+	return unmarshalledHistory(response)
 }
 
 /*

@@ -367,6 +367,22 @@ func handler(w http.ResponseWriter, r *http.Request) {
 go test ./...
 ```
 
+## Channel History
+
+```go
+limit := 50
+direction := "newest_first"
+page, err := client.ChannelHistory("my-channel", sockudo.HistoryParams{
+	Limit: &limit,
+	Direction: &direction,
+})
+
+cursor := "opaque-cursor-from-previous-page"
+nextPage, err := client.ChannelHistory("my-channel", sockudo.HistoryParams{
+	Cursor: &cursor,
+})
+```
+
 ## Pusher SDK Compatibility
 
 Sockudo implements the full Pusher HTTP API. If you prefer to use the official `github.com/pusher/pusher-http-go/v5` package or are migrating from Pusher, point it at your Sockudo instance:

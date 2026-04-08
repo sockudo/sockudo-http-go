@@ -45,6 +45,46 @@ type Users struct {
 	List []User `json:"users"`
 }
 
+type HistoryPage struct {
+	Items      []HistoryItem      `json:"items"`
+	Direction  string             `json:"direction"`
+	Limit      int                `json:"limit"`
+	HasMore    bool               `json:"has_more"`
+	NextCursor *string            `json:"next_cursor"`
+	Bounds     HistoryBounds      `json:"bounds"`
+	Continuity HistoryContinuity  `json:"continuity"`
+}
+
+type HistoryItem struct {
+	StreamID        string                 `json:"stream_id"`
+	Serial          int64                  `json:"serial"`
+	PublishedAtMS   int64                  `json:"published_at_ms"`
+	MessageID       *string                `json:"message_id"`
+	EventName       *string                `json:"event_name"`
+	OperationKind   string                 `json:"operation_kind"`
+	PayloadSizeByte int                    `json:"payload_size_bytes"`
+	Message         map[string]interface{} `json:"message"`
+}
+
+type HistoryBounds struct {
+	StartSerial *int64 `json:"start_serial"`
+	EndSerial   *int64 `json:"end_serial"`
+	StartTimeMS *int64 `json:"start_time_ms"`
+	EndTimeMS   *int64 `json:"end_time_ms"`
+}
+
+type HistoryContinuity struct {
+	StreamID                   *string `json:"stream_id"`
+	OldestAvailableSerial      *int64  `json:"oldest_available_serial"`
+	NewestAvailableSerial      *int64  `json:"newest_available_serial"`
+	OldestAvailablePublishedMS *int64  `json:"oldest_available_published_at_ms"`
+	NewestAvailablePublishedMS *int64  `json:"newest_available_published_at_ms"`
+	RetainedMessages           int64   `json:"retained_messages"`
+	RetainedBytes              int64   `json:"retained_bytes"`
+	Complete                   bool    `json:"complete"`
+	TruncatedByRetention       bool    `json:"truncated_by_retention"`
+}
+
 // User represents a user and contains their ID.
 type User struct {
 	ID string `json:"id"`
@@ -112,4 +152,13 @@ func unmarshalledChannelUsers(response []byte) (*Users, error) {
 	}
 
 	return users, nil
+}
+
+func unmarshalledHistory(response []byte) (*HistoryPage, error) {
+	page := &HistoryPage{}
+	err := json.Unmarshal(response, page)
+	if err != nil {
+		return nil, err
+	}
+	return page, nil
 }
