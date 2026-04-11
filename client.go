@@ -645,6 +645,123 @@ func (c *Client) ChannelHistory(name string, params HistoryParams) (*HistoryPage
 	return unmarshalledHistory(response)
 }
 
+// PresenceHistoryParams are parameters for querying presence history.
+type PresenceHistoryParams struct {
+	Limit       *int
+	Direction   *string
+	Cursor      *string
+	StartSerial *int64
+	EndSerial   *int64
+	StartTimeMS *int64
+	EndTimeMS   *int64
+	// Ably-compatible alias for StartTimeMS
+	Start *int64
+	// Ably-compatible alias for EndTimeMS
+	End *int64
+}
+
+func (params PresenceHistoryParams) toMap() map[string]string {
+	m := make(map[string]string)
+	if params.Limit != nil {
+		m["limit"] = fmt.Sprintf("%d", *params.Limit)
+	}
+	if params.Direction != nil {
+		m["direction"] = *params.Direction
+	}
+	if params.Cursor != nil {
+		m["cursor"] = *params.Cursor
+	}
+	if params.StartSerial != nil {
+		m["start_serial"] = fmt.Sprintf("%d", *params.StartSerial)
+	}
+	if params.EndSerial != nil {
+		m["end_serial"] = fmt.Sprintf("%d", *params.EndSerial)
+	}
+	startTime := params.StartTimeMS
+	if startTime == nil {
+		startTime = params.Start
+	}
+	if startTime != nil {
+		m["start_time_ms"] = fmt.Sprintf("%d", *startTime)
+	}
+	endTime := params.EndTimeMS
+	if endTime == nil {
+		endTime = params.End
+	}
+	if endTime != nil {
+		m["end_time_ms"] = fmt.Sprintf("%d", *endTime)
+	}
+	return m
+}
+
+// PresenceSnapshotParams are parameters for reconstructing presence membership at a point in time.
+type PresenceSnapshotParams struct {
+	AtTimeMS *int64
+	// Ably-compatible alias for AtTimeMS
+	At       *int64
+	AtSerial *int64
+}
+
+func (params PresenceSnapshotParams) toMap() map[string]string {
+	m := make(map[string]string)
+	atTime := params.AtTimeMS
+	if atTime == nil {
+		atTime = params.At
+	}
+	if atTime != nil {
+		m["at_time_ms"] = fmt.Sprintf("%d", *atTime)
+	}
+	if params.AtSerial != nil {
+		m["at_serial"] = fmt.Sprintf("%d", *params.AtSerial)
+	}
+	return m
+}
+
+/*
+ChannelPresenceHistory returns presence history for a presence channel.
+
+	limit := 50
+	direction := "newest_first"
+	page, err := client.ChannelPresenceHistory("presence-chatroom", PresenceHistoryParams{Limit: &limit, Direction: &direction})
+*/
+func (c *Client) ChannelPresenceHistory(name string, params PresenceHistoryParams) (*PresenceHistoryPage, error) {
+	if !strings.HasPrefix(name, "presence-") {
+		return nil, errors.New("presence history is only available for presence channels")
+	}
+	path := fmt.Sprintf("/apps/%s/channels/%s/presence/history", c.AppID, name)
+	u, err := createRequestURL("GET", c.Host, path, c.Key, c.Secret, authTimestamp(), c.Secure, nil, params.toMap(), c.Cluster)
+	if err != nil {
+		return nil, err
+	}
+	response, err := c.request("GET", u, nil)
+	if err != nil {
+		return nil, err
+	}
+	return unmarshalledPresenceHistory(response)
+}
+
+/*
+ChannelPresenceSnapshot reconstructs effective presence membership at a point in time.
+
+	serial := int64(42)
+	snapshot, err := client.ChannelPresenceSnapshot("presence-chatroom", PresenceSnapshotParams{AtSerial: &serial})
+*/
+func (c *Client) ChannelPresenceSnapshot(name string, params PresenceSnapshotParams) (*PresenceSnapshot, error) {
+	if !strings.HasPrefix(name, "presence-") {
+		return nil, errors.New("presence snapshot is only available for presence channels")
+	}
+	path := fmt.Sprintf("/apps/%s/channels/%s/presence/history/snapshot", c.AppID, name)
+	u, err := createRequestURL("GET", c.Host, path, c.Key, c.Secret, authTimestamp(), c.Secure, nil, params.toMap(), c.Cluster)
+	if err != nil {
+		return nil, err
+	}
+	response, err := c.request("GET", u, nil)
+	if err != nil {
+		return nil, err
+	}
+	return unmarshalledPresenceSnapshot(response)
+}
+
 /*
 AuthenticateUser allows you to authenticate a user's connection.
 It returns an authentication signature to send back to the client

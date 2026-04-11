@@ -162,3 +162,79 @@ func unmarshalledHistory(response []byte) (*HistoryPage, error) {
 	}
 	return page, nil
 }
+
+// PresenceHistoryPage represents a page of presence history events.
+type PresenceHistoryPage struct {
+	Items      []PresenceHistoryItem      `json:"items"`
+	Direction  string                     `json:"direction"`
+	Limit      int                        `json:"limit"`
+	HasMore    bool                       `json:"has_more"`
+	NextCursor *string                    `json:"next_cursor"`
+	Bounds     HistoryBounds              `json:"bounds"`
+	Continuity PresenceHistoryContinuity  `json:"continuity"`
+}
+
+// PresenceHistoryItem represents a single presence transition event.
+type PresenceHistoryItem struct {
+	StreamID        string                 `json:"stream_id"`
+	Serial          int64                  `json:"serial"`
+	PublishedAtMS   int64                  `json:"published_at_ms"`
+	Event           string                 `json:"event"`
+	Cause           string                 `json:"cause"`
+	UserID          string                 `json:"user_id"`
+	ConnectionID    *string                `json:"connection_id"`
+	DeadNodeID      *string                `json:"dead_node_id"`
+	PayloadSizeBytes int                   `json:"payload_size_bytes"`
+	PresenceEvent   map[string]interface{} `json:"presence_event"`
+}
+
+// PresenceHistoryContinuity contains retention and continuity metadata for presence history.
+type PresenceHistoryContinuity struct {
+	StreamID                   *string `json:"stream_id"`
+	OldestAvailableSerial      *int64  `json:"oldest_available_serial"`
+	NewestAvailableSerial      *int64  `json:"newest_available_serial"`
+	OldestAvailablePublishedMS *int64  `json:"oldest_available_published_at_ms"`
+	NewestAvailablePublishedMS *int64  `json:"newest_available_published_at_ms"`
+	RetainedEvents             int64   `json:"retained_events"`
+	RetainedBytes              int64   `json:"retained_bytes"`
+	Degraded                   bool    `json:"degraded"`
+	Complete                   bool    `json:"complete"`
+	TruncatedByRetention       bool    `json:"truncated_by_retention"`
+}
+
+// PresenceSnapshotMember represents a member in a reconstructed presence snapshot.
+type PresenceSnapshotMember struct {
+	UserID          string `json:"user_id"`
+	LastEvent       string `json:"last_event"`
+	LastEventSerial int64  `json:"last_event_serial"`
+	LastEventAtMS   int64  `json:"last_event_at_ms"`
+}
+
+// PresenceSnapshot represents reconstructed presence membership at a point in time.
+type PresenceSnapshot struct {
+	Channel        string                    `json:"channel"`
+	Members        []PresenceSnapshotMember  `json:"members"`
+	MemberCount    int                       `json:"member_count"`
+	EventsReplayed int64                     `json:"events_replayed"`
+	SnapshotSerial *int64                    `json:"snapshot_serial"`
+	SnapshotTimeMS *int64                    `json:"snapshot_time_ms"`
+	Continuity     PresenceHistoryContinuity `json:"continuity"`
+}
+
+func unmarshalledPresenceHistory(response []byte) (*PresenceHistoryPage, error) {
+	page := &PresenceHistoryPage{}
+	err := json.Unmarshal(response, page)
+	if err != nil {
+		return nil, err
+	}
+	return page, nil
+}
+
+func unmarshalledPresenceSnapshot(response []byte) (*PresenceSnapshot, error) {
+	snapshot := &PresenceSnapshot{}
+	err := json.Unmarshal(response, snapshot)
+	if err != nil {
+		return nil, err
+	}
+	return snapshot, nil
+}
