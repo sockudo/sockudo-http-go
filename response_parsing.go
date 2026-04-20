@@ -2,6 +2,7 @@ package sockudo
 
 import (
 	"encoding/json"
+	"strconv"
 )
 
 // Channel represents the information about a channel from the Sockudo API.
@@ -46,13 +47,13 @@ type Users struct {
 }
 
 type HistoryPage struct {
-	Items      []HistoryItem      `json:"items"`
-	Direction  string             `json:"direction"`
-	Limit      int                `json:"limit"`
-	HasMore    bool               `json:"has_more"`
-	NextCursor *string            `json:"next_cursor"`
-	Bounds     HistoryBounds      `json:"bounds"`
-	Continuity HistoryContinuity  `json:"continuity"`
+	Items      []HistoryItem     `json:"items"`
+	Direction  string            `json:"direction"`
+	Limit      int               `json:"limit"`
+	HasMore    bool              `json:"has_more"`
+	NextCursor *string           `json:"next_cursor"`
+	Bounds     HistoryBounds     `json:"bounds"`
+	Continuity HistoryContinuity `json:"continuity"`
 }
 
 type HistoryItem struct {
@@ -165,27 +166,27 @@ func unmarshalledHistory(response []byte) (*HistoryPage, error) {
 
 // PresenceHistoryPage represents a page of presence history events.
 type PresenceHistoryPage struct {
-	Items      []PresenceHistoryItem      `json:"items"`
-	Direction  string                     `json:"direction"`
-	Limit      int                        `json:"limit"`
-	HasMore    bool                       `json:"has_more"`
-	NextCursor *string                    `json:"next_cursor"`
-	Bounds     HistoryBounds              `json:"bounds"`
-	Continuity PresenceHistoryContinuity  `json:"continuity"`
+	Items      []PresenceHistoryItem     `json:"items"`
+	Direction  string                    `json:"direction"`
+	Limit      int                       `json:"limit"`
+	HasMore    bool                      `json:"has_more"`
+	NextCursor *string                   `json:"next_cursor"`
+	Bounds     HistoryBounds             `json:"bounds"`
+	Continuity PresenceHistoryContinuity `json:"continuity"`
 }
 
 // PresenceHistoryItem represents a single presence transition event.
 type PresenceHistoryItem struct {
-	StreamID        string                 `json:"stream_id"`
-	Serial          int64                  `json:"serial"`
-	PublishedAtMS   int64                  `json:"published_at_ms"`
-	Event           string                 `json:"event"`
-	Cause           string                 `json:"cause"`
-	UserID          string                 `json:"user_id"`
-	ConnectionID    *string                `json:"connection_id"`
-	DeadNodeID      *string                `json:"dead_node_id"`
-	PayloadSizeBytes int                   `json:"payload_size_bytes"`
-	PresenceEvent   map[string]interface{} `json:"presence_event"`
+	StreamID         string                 `json:"stream_id"`
+	Serial           int64                  `json:"serial"`
+	PublishedAtMS    int64                  `json:"published_at_ms"`
+	Event            string                 `json:"event"`
+	Cause            string                 `json:"cause"`
+	UserID           string                 `json:"user_id"`
+	ConnectionID     *string                `json:"connection_id"`
+	DeadNodeID       *string                `json:"dead_node_id"`
+	PayloadSizeBytes int                    `json:"payload_size_bytes"`
+	PresenceEvent    map[string]interface{} `json:"presence_event"`
 }
 
 // PresenceHistoryContinuity contains retention and continuity metadata for presence history.
@@ -237,4 +238,74 @@ func unmarshalledPresenceSnapshot(response []byte) (*PresenceSnapshot, error) {
 		return nil, err
 	}
 	return snapshot, nil
+}
+
+type MessageVersionsParams struct {
+	Limit     *int
+	Direction *string
+	Cursor    *string
+}
+
+func (params MessageVersionsParams) toMap() map[string]string {
+	m := make(map[string]string)
+	if params.Limit != nil {
+		m["limit"] = strconv.Itoa(*params.Limit)
+	}
+	if params.Direction != nil {
+		m["direction"] = *params.Direction
+	}
+	if params.Cursor != nil {
+		m["cursor"] = *params.Cursor
+	}
+	return m
+}
+
+type MutationResponse struct {
+	Channel       string  `json:"channel"`
+	MessageSerial string  `json:"message_serial"`
+	Action        string  `json:"action"`
+	Accepted      bool    `json:"accepted"`
+	VersionSerial *string `json:"version_serial"`
+	Status        string  `json:"status"`
+}
+
+type GetMessageResponse struct {
+	Channel string                 `json:"channel"`
+	Item    map[string]interface{} `json:"item"`
+}
+
+type MessageVersionsResponse struct {
+	Channel    string                   `json:"channel"`
+	Direction  string                   `json:"direction"`
+	Limit      int                      `json:"limit"`
+	HasMore    bool                     `json:"has_more"`
+	NextCursor *string                  `json:"next_cursor"`
+	Items      []map[string]interface{} `json:"items"`
+}
+
+func unmarshalledMessage(response []byte) (*GetMessageResponse, error) {
+	page := &GetMessageResponse{}
+	err := json.Unmarshal(response, page)
+	if err != nil {
+		return nil, err
+	}
+	return page, nil
+}
+
+func unmarshalledMessageVersions(response []byte) (*MessageVersionsResponse, error) {
+	page := &MessageVersionsResponse{}
+	err := json.Unmarshal(response, page)
+	if err != nil {
+		return nil, err
+	}
+	return page, nil
+}
+
+func unmarshalledMutationResponse(response []byte) (*MutationResponse, error) {
+	payload := &MutationResponse{}
+	err := json.Unmarshal(response, payload)
+	if err != nil {
+		return nil, err
+	}
+	return payload, nil
 }

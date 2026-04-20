@@ -645,6 +645,98 @@ func (c *Client) ChannelHistory(name string, params HistoryParams) (*HistoryPage
 	return unmarshalledHistory(response)
 }
 
+func (c *Client) GetMessage(channelName string, messageSerial string) (*GetMessageResponse, error) {
+	if !validChannel(channelName) {
+		return nil, fmt.Errorf("Channel name '%s' is invalid", channelName)
+	}
+	path := fmt.Sprintf("/apps/%s/channels/%s/messages/%s", c.AppID, channelName, messageSerial)
+	u, err := createRequestURL("GET", c.Host, path, c.Key, c.Secret, authTimestamp(), c.Secure, nil, nil, c.Cluster)
+	if err != nil {
+		return nil, err
+	}
+	response, err := c.request("GET", u, nil)
+	if err != nil {
+		return nil, err
+	}
+	return unmarshalledMessage(response)
+}
+
+func (c *Client) GetMessageVersions(channelName string, messageSerial string, params MessageVersionsParams) (*MessageVersionsResponse, error) {
+	if !validChannel(channelName) {
+		return nil, fmt.Errorf("Channel name '%s' is invalid", channelName)
+	}
+	path := fmt.Sprintf("/apps/%s/channels/%s/messages/%s/versions", c.AppID, channelName, messageSerial)
+	u, err := createRequestURL("GET", c.Host, path, c.Key, c.Secret, authTimestamp(), c.Secure, nil, params.toMap(), c.Cluster)
+	if err != nil {
+		return nil, err
+	}
+	response, err := c.request("GET", u, nil)
+	if err != nil {
+		return nil, err
+	}
+	return unmarshalledMessageVersions(response)
+}
+
+func (c *Client) UpdateMessage(channelName string, messageSerial string, payload interface{}) (*MutationResponse, error) {
+	if !validChannel(channelName) {
+		return nil, fmt.Errorf("Channel name '%s' is invalid", channelName)
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	path := fmt.Sprintf("/apps/%s/channels/%s/messages/%s/update", c.AppID, channelName, messageSerial)
+	u, err := createRequestURL("POST", c.Host, path, c.Key, c.Secret, authTimestamp(), c.Secure, body, nil, c.Cluster)
+	if err != nil {
+		return nil, err
+	}
+	response, err := c.request("POST", u, body)
+	if err != nil {
+		return nil, err
+	}
+	return unmarshalledMutationResponse(response)
+}
+
+func (c *Client) DeleteMessage(channelName string, messageSerial string, payload interface{}) (*MutationResponse, error) {
+	if !validChannel(channelName) {
+		return nil, fmt.Errorf("Channel name '%s' is invalid", channelName)
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	path := fmt.Sprintf("/apps/%s/channels/%s/messages/%s/delete", c.AppID, channelName, messageSerial)
+	u, err := createRequestURL("POST", c.Host, path, c.Key, c.Secret, authTimestamp(), c.Secure, body, nil, c.Cluster)
+	if err != nil {
+		return nil, err
+	}
+	response, err := c.request("POST", u, body)
+	if err != nil {
+		return nil, err
+	}
+	return unmarshalledMutationResponse(response)
+}
+
+func (c *Client) AppendMessage(channelName string, messageSerial string, payload interface{}) (*MutationResponse, error) {
+	if !validChannel(channelName) {
+		return nil, fmt.Errorf("Channel name '%s' is invalid", channelName)
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	path := fmt.Sprintf("/apps/%s/channels/%s/messages/%s/append", c.AppID, channelName, messageSerial)
+	u, err := createRequestURL("POST", c.Host, path, c.Key, c.Secret, authTimestamp(), c.Secure, body, nil, c.Cluster)
+	if err != nil {
+		return nil, err
+	}
+	response, err := c.request("POST", u, body)
+	if err != nil {
+		return nil, err
+	}
+	return unmarshalledMutationResponse(response)
+}
+
 // PresenceHistoryParams are parameters for querying presence history.
 type PresenceHistoryParams struct {
 	Limit       *int

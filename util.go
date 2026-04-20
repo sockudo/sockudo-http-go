@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-var channelValidationRegex = regexp.MustCompile("^[-a-zA-Z0-9_=@,.;]+$")
+var channelValidationRegex = regexp.MustCompile("^[-a-zA-Z0-9_=@,.;:]+$")
 var socketIDValidationRegex = regexp.MustCompile(`\A\d+\.\d+\z`)
 var maxChannelNameSize = 200
 
