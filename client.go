@@ -737,6 +737,62 @@ func (c *Client) AppendMessage(channelName string, messageSerial string, payload
 	return unmarshalledMutationResponse(response)
 }
 
+func (c *Client) PublishAnnotation(channelName string, messageSerial string, payload PublishAnnotationRequest) (*PublishAnnotationResponse, error) {
+	if !validChannel(channelName) {
+		return nil, fmt.Errorf("Channel name '%s' is invalid", channelName)
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	path := fmt.Sprintf("/apps/%s/channels/%s/messages/%s/annotations", c.AppID, channelName, messageSerial)
+	u, err := createRequestURL("POST", c.Host, path, c.Key, c.Secret, authTimestamp(), c.Secure, body, nil, c.Cluster)
+	if err != nil {
+		return nil, err
+	}
+	response, err := c.request("POST", u, body)
+	if err != nil {
+		return nil, err
+	}
+	return unmarshalledPublishAnnotationResponse(response)
+}
+
+func (c *Client) DeleteAnnotation(channelName string, messageSerial string, annotationSerial string, socketID *string) (*DeleteAnnotationResponse, error) {
+	if !validChannel(channelName) {
+		return nil, fmt.Errorf("Channel name '%s' is invalid", channelName)
+	}
+	params := map[string]string{}
+	if socketID != nil {
+		params["socket_id"] = *socketID
+	}
+	path := fmt.Sprintf("/apps/%s/channels/%s/messages/%s/annotations/%s", c.AppID, channelName, messageSerial, annotationSerial)
+	u, err := createRequestURL("DELETE", c.Host, path, c.Key, c.Secret, authTimestamp(), c.Secure, nil, params, c.Cluster)
+	if err != nil {
+		return nil, err
+	}
+	response, err := c.request("DELETE", u, nil)
+	if err != nil {
+		return nil, err
+	}
+	return unmarshalledDeleteAnnotationResponse(response)
+}
+
+func (c *Client) ListAnnotations(channelName string, messageSerial string, params AnnotationEventsParams) (*AnnotationEventsResponse, error) {
+	if !validChannel(channelName) {
+		return nil, fmt.Errorf("Channel name '%s' is invalid", channelName)
+	}
+	path := fmt.Sprintf("/apps/%s/channels/%s/messages/%s/annotations", c.AppID, channelName, messageSerial)
+	u, err := createRequestURL("GET", c.Host, path, c.Key, c.Secret, authTimestamp(), c.Secure, nil, params.toMap(), c.Cluster)
+	if err != nil {
+		return nil, err
+	}
+	response, err := c.request("GET", u, nil)
+	if err != nil {
+		return nil, err
+	}
+	return unmarshalledAnnotationEvents(response)
+}
+
 // PresenceHistoryParams are parameters for querying presence history.
 type PresenceHistoryParams struct {
 	Limit       *int

@@ -260,6 +260,72 @@ func (params MessageVersionsParams) toMap() map[string]string {
 	return m
 }
 
+type AnnotationEventsParams struct {
+	Type       *string
+	FromSerial *string
+	Limit      *int
+	SocketID   *string
+}
+
+func (params AnnotationEventsParams) toMap() map[string]string {
+	m := make(map[string]string)
+	if params.Type != nil {
+		m["type"] = *params.Type
+	}
+	if params.FromSerial != nil {
+		m["from_serial"] = *params.FromSerial
+	}
+	if params.Limit != nil {
+		m["limit"] = strconv.Itoa(*params.Limit)
+	}
+	if params.SocketID != nil {
+		m["socket_id"] = *params.SocketID
+	}
+	return m
+}
+
+type PublishAnnotationRequest struct {
+	Type     string      `json:"type"`
+	Name     *string     `json:"name,omitempty"`
+	ClientID *string     `json:"clientId,omitempty"`
+	SocketID *string     `json:"socketId,omitempty"`
+	Count    *uint64     `json:"count,omitempty"`
+	Data     interface{} `json:"data,omitempty"`
+	Encoding *string     `json:"encoding,omitempty"`
+}
+
+type PublishAnnotationResponse struct {
+	AnnotationSerial string `json:"annotationSerial"`
+}
+
+type DeleteAnnotationResponse struct {
+	AnnotationSerial        string `json:"annotationSerial"`
+	DeletedAnnotationSerial string `json:"deletedAnnotationSerial"`
+}
+
+type AnnotationEvent struct {
+	Action        string      `json:"action"`
+	ID            *string     `json:"id,omitempty"`
+	Serial        string      `json:"serial"`
+	MessageSerial string      `json:"messageSerial"`
+	Type          string      `json:"type"`
+	Name          *string     `json:"name,omitempty"`
+	ClientID      *string     `json:"clientId,omitempty"`
+	Count         *uint64     `json:"count,omitempty"`
+	Data          interface{} `json:"data,omitempty"`
+	Encoding      *string     `json:"encoding,omitempty"`
+	Timestamp     *int64      `json:"timestamp,omitempty"`
+}
+
+type AnnotationEventsResponse struct {
+	Channel       string            `json:"channel"`
+	MessageSerial string            `json:"messageSerial"`
+	Limit         int               `json:"limit"`
+	HasMore       bool              `json:"hasMore"`
+	NextCursor    *string           `json:"nextCursor"`
+	Items         []AnnotationEvent `json:"items"`
+}
+
 type MutationResponse struct {
 	Channel       string  `json:"channel"`
 	MessageSerial string  `json:"message_serial"`
@@ -303,6 +369,33 @@ func unmarshalledMessageVersions(response []byte) (*MessageVersionsResponse, err
 
 func unmarshalledMutationResponse(response []byte) (*MutationResponse, error) {
 	payload := &MutationResponse{}
+	err := json.Unmarshal(response, payload)
+	if err != nil {
+		return nil, err
+	}
+	return payload, nil
+}
+
+func unmarshalledPublishAnnotationResponse(response []byte) (*PublishAnnotationResponse, error) {
+	payload := &PublishAnnotationResponse{}
+	err := json.Unmarshal(response, payload)
+	if err != nil {
+		return nil, err
+	}
+	return payload, nil
+}
+
+func unmarshalledDeleteAnnotationResponse(response []byte) (*DeleteAnnotationResponse, error) {
+	payload := &DeleteAnnotationResponse{}
+	err := json.Unmarshal(response, payload)
+	if err != nil {
+		return nil, err
+	}
+	return payload, nil
+}
+
+func unmarshalledAnnotationEvents(response []byte) (*AnnotationEventsResponse, error) {
+	payload := &AnnotationEventsResponse{}
 	err := json.Unmarshal(response, payload)
 	if err != nil {
 		return nil, err
