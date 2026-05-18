@@ -55,6 +55,16 @@ func TestGetAllChannelsWithNoParamsUrl(t *testing.T) {
 	assert.Equal(t, expected, result)
 }
 
+func TestRequestURLSignsLowercaseQueryKeysButKeepsOriginalRequestKeys(t *testing.T) {
+	additionalQueries := map[string]string{"deviceId": "device-1", "limit": "10"}
+	result, _ := createRequestURL("GET", "", "/apps/102015/push/channelSubscriptions", "d41a439c438a100756f5", "4bf35003e819bb138249", "1427036787", false, nil, additionalQueries, "")
+
+	expectedSignature := hmacSignature("GET\n/apps/102015/push/channelSubscriptions\nauth_key=d41a439c438a100756f5&auth_timestamp=1427036787&auth_version=1.0&deviceid=device-1&limit=10", "4bf35003e819bb138249")
+	assert.Contains(t, result, "deviceId=device-1")
+	assert.NotContains(t, result, "deviceid=device-1")
+	assert.Contains(t, result, "auth_signature="+expectedSignature)
+}
+
 func TestGetChannelUrl(t *testing.T) {
 	expected := "http://localhost/apps/102015/channels/presence-session-d41a439c438a100756f5-4bf35003e819bb138249-ROpCFmgFhXY?auth_key=d41a439c438a100756f5&auth_signature=f93ceb31f396aef336226efe512aaf339bd5e39c7c2c04b81cc8681dc16ee785&auth_timestamp=1427053326&auth_version=1.0&info=user_count,subscription_count"
 	additionalQueries := map[string]string{"info": "user_count,subscription_count"}

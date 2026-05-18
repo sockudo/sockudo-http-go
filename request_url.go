@@ -31,10 +31,20 @@ func unescapeURL(_url url.Values) string {
 	return unesc
 }
 
+func lowercaseParamKeys(values url.Values) url.Values {
+	lowercased := url.Values{}
+	for key, valueSet := range values {
+		for _, value := range valueSet {
+			lowercased.Add(strings.ToLower(key), value)
+		}
+	}
+	return lowercased
+}
+
 func createRequestURL(method, host, path, key, secret, timestamp string, secure bool, body []byte, parameters map[string]string, cluster string) (string, error) {
 	params := unsignedParams(key, timestamp, body, parameters)
 
-	stringToSign := strings.Join([]string{method, path, unescapeURL(params)}, "\n")
+	stringToSign := strings.Join([]string{method, path, unescapeURL(lowercaseParamKeys(params))}, "\n")
 
 	authSignature := hmacSignature(stringToSign, secret)
 
